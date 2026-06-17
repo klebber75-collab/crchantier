@@ -127,7 +127,7 @@ select.st.none{background:#f0ede5;color:var(--mu);}
 
 /* PRINT */
 @media print{
-  #topbar,#cr-bar,#sb,.btn,.btn-p,.btn-d,.btn-sm,.btn-gold,.tbtn,#dz,.pdel,.no-print,.modal-ov,.mclose,.it-bar,.task-actions,select.st,.archived-section{display:none!important;}
+  #topbar,#cr-bar,#sb,.btn,.btn-p,.btn-d,.btn-sm,.btn-gold,.tbtn,#dz,.pdel,.no-print,.modal-ov,.mclose,.it-bar,.task-actions,select.st{display:none!important;}
   body{background:#fff;font-size:10px;}
   .view.active{display:block;}
   .card{break-inside:avoid;margin-bottom:8px;}
@@ -173,14 +173,6 @@ button,select,input,textarea,label{touch-action:manipulation;-webkit-tap-highlig
 .al-badge.urgent{background:#fee;color:#c00;}
 .gtable tr.al-urgent td{background:#fff5f5;}
 .gtable tr.al-important td{background:#fffaf4;}
-
-/* TÂCHES EFFECTUÉES (archivées) */
-.archived-section{margin-top:16px;}
-.archived-toggle{width:100%;background:var(--ok-bg);border:1px solid var(--ok);color:var(--ok);padding:9px 14px;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;text-align:left;touch-action:manipulation;-webkit-tap-highlight-color:transparent;display:flex;justify-content:space-between;align-items:center;font-family:var(--sans);}
-.archived-toggle:active{opacity:.8;}
-.archived-body{margin-top:6px;display:none;}
-.task-card.archived{opacity:.65;border-left:3px solid var(--ok)!important;}
-.task-card.archived .obs{text-decoration:line-through;color:var(--mu);}
 </style>
 </head>
 <body>
@@ -733,53 +725,11 @@ function switchTaskView(v,cid){
   document.querySelector('[onclick*="switchTaskView(\'groupe\'"]')?.classList.toggle('btn-p',v==='groupe');
 }
 
-// ══════ ARCHIVAGE DES TÂCHES OK ══════
-// Une tâche OK est archivée (masquée) dès que le CR courant est à +2 réunions de celui où elle a été marquée OK
-function isTaskArchived(t,cr){
-  if(t.statut!=='OK')return false;
-  if(t.okCrNum===undefined||t.okCrNum===null)return false; // rétro-compatibilité : tâches OK existantes restent visibles
-  return(parseInt(cr.num)||0)-(parseInt(t.okCrNum)||0)>=2;
-}
-
-function renderArchivedSection(archived,cr){
-  if(!archived.length)return'';
-  const n=archived.length;
-  const sid='arch-'+cr.id;
-  const rows=archived.map(t=>{
-    const i=(cr.tasks||[]).indexOf(t);
-    return`<div class="task-card archived">
-      <div>
-        <div class="obs" onclick="openMoTask(${i},'${cr.id}')">${esc(t.obs)}</div>
-        <div class="task-meta">
-          <span class="badge" style="background:var(--ok-bg);color:var(--ok)">✓ OK</span>
-          <span class="badge">${esc(t.dest||'—')}</span>
-          ${t.loc?`<span class="task-loc">${esc(t.loc)}</span>`:''}
-          ${t.date?`<span class="task-date">${fmtD(t.date)}</span>`:''}
-        </div>
-      </div>
-      <div class="task-actions">
-        <button class="btn btn-sm btn-d" style="padding:4px 8px" onclick="delTask(${i},'${cr.id}')">✕</button>
-      </div>
-    </div>`;
-  }).join('');
-  return`<div class="archived-section">
-    <button class="archived-toggle no-print" onclick="(function(b,a){b.style.display=b.style.display==='block'?'none':'block';a.textContent=b.style.display==='block'?'▲':'▼';})(document.getElementById('${sid}'),this.querySelector('.arch-arrow'))">
-      <span>✓ Tâches effectuées (${n})</span><span class="arch-arrow">▼</span>
-    </button>
-    <div id="${sid}" class="archived-body"><div class="task-list" style="margin-top:8px">${rows}</div></div>
-  </div>`;
-}
-
 // VUE LISTE
 function renderTachesListe(cr){
   const tasks=cr.tasks||[];
-  const active=tasks.filter(t=>!isTaskArchived(t,cr));
-  const archived=tasks.filter(t=>isTaskArchived(t,cr));
   if(!tasks.length)return`<div style="text-align:center;padding:40px;color:var(--mu)">Aucune tâche — appuyez sur + Tâche</div>`;
-  let html='';
-  if(!active.length)html=`<div style="text-align:center;padding:20px;color:var(--mu)">Aucune tâche active</div>`;
-  else html=`<div class="task-list">${active.map(t=>{
-    const i=(cr.tasks||[]).indexOf(t);
+  return`<div class="task-list">${tasks.map((t,i)=>{
     const sc=stCls(t.statut);
     return`<div class="task-card${t.alerte?' al-'+t.alerte:''}">
       <div>
@@ -805,8 +755,6 @@ function renderTachesListe(cr){
       </div>
     </div>`;
   }).join('')}</div>`;
-  html+=renderArchivedSection(archived,cr);
-  return html;
 }
 
 // VUE GROUPÉE
@@ -814,13 +762,11 @@ const CAT_ORDER=['VISA','EXECUTION','ECHANTILLONS','SUIVI PROJET'];
 const CAT_LABELS={VISA:'VISA',EXECUTION:'Exécution',ECHANTILLONS:'Échantillons','SUIVI PROJET':'Suivi projet'};
 function renderTachesGroupe(cr){
   const tasks=cr.tasks||[];
-  const active=tasks.filter(t=>!isTaskArchived(t,cr));
-  const archived=tasks.filter(t=>isTaskArchived(t,cr));
   const interv=getIntervenants(cr);
   const groups={};
   interv.forEach(iv=>{groups[iv.key]=[];}); 
   const autreKey='_autre';groups[autreKey]=[];
-  active.forEach(t=>{
+  tasks.forEach(t=>{
     const key=t.dest||'';
     if(groups[key]!==undefined)groups[key].push(t);
     else groups[autreKey].push(t);
@@ -862,16 +808,12 @@ function renderTachesGroupe(cr){
       <table class="gtable"><tbody>${rows}</tbody></table>
     </div>`;
   });
-  if(!html)html=`<div style="text-align:center;padding:${archived.length?'20':'40'}px;color:var(--mu)">Aucune tâche${archived.length?' active':' — appuyez sur + Tâche'}</div>`;
-  html+=renderArchivedSection(archived,cr);
-  return html;
+  return html||`<div style="text-align:center;padding:40px;color:var(--mu)">Aucune tâche</div>`;
 }
 
 function updStTask(sel,i,cid){
   const cr=findCR(cid);if(!cr)return;
   cr.tasks[i].statut=sel.value;
-  if(sel.value==='OK'){if(cr.tasks[i].okCrNum===undefined)cr.tasks[i].okCrNum=parseInt(cr.num)||0;}
-  else delete cr.tasks[i].okCrNum;
   sel.className='st '+stCls(sel.value);save();
 }
 function delTask(i,cid){
@@ -903,14 +845,7 @@ function saveMoTask(){
   const t={obs,dest:val('mot-dest'),date:val('mot-date'),loc:val('mot-loc'),pour:val('mot-pour'),statut:val('mot-st'),alerte:val('mot-alerte'),cat:val('mot-cat')||'SUIVI PROJET'};
   const cr=findCR(_motCrId);if(!cr)return;
   if(!cr.tasks)cr.tasks=[];
-  if(_motIdx>=0){
-    const old=cr.tasks[_motIdx];
-    if(t.statut==='OK')t.okCrNum=(old&&old.okCrNum!==undefined)?old.okCrNum:(parseInt(cr.num)||0);
-    cr.tasks[_motIdx]=t;
-  }else{
-    if(t.statut==='OK')t.okCrNum=parseInt(cr.num)||0;
-    cr.tasks.push(t);
-  }
+  if(_motIdx>=0)cr.tasks[_motIdx]=t;else cr.tasks.push(t);
   // Détection des @tags → tâches de coordination (uniquement à la création)
   if(_motIdx<0){
     const interv=getAllInterv(cr);
@@ -969,14 +904,14 @@ function closeMoExp(){g('mo-exp').classList.remove('open');}
 function updateExpPreview(){
   const cr=findCR(_expCrId);if(!cr)return;
   const key=val('exp-dest');
-  const n=(cr.tasks||[]).filter(t=>t.dest===key&&!isTaskArchived(t,cr)).length;
+  const n=(cr.tasks||[]).filter(t=>t.dest===key).length;
   g('exp-preview').textContent=n+' tâche(s) pour cet intervenant';
 }
 function printInterv(){
   const cr=findCR(_expCrId);if(!cr)return;
   const key=val('exp-dest');
   const label=g('exp-dest').options[g('exp-dest').selectedIndex]?.text||key;
-  const tasks=(cr.tasks||[]).filter(t=>t.dest===key&&!isTaskArchived(t,cr));
+  const tasks=(cr.tasks||[]).filter(t=>t.dest===key);
   const rows=tasks.map(t=>`<tr style="border-bottom:1px solid #eee">
     <td style="padding:6px 8px;width:76px;font-size:11px;white-space:nowrap">${fmtD(t.date)}</td>
     <td style="padding:6px 8px;width:80px;font-size:11px">${esc(t.loc)}</td>
@@ -1005,10 +940,8 @@ function printInterv(){
   document.body.classList.add('printing-interv');
   g('print-interv').classList.add('printing');
   closeMoExp();
-  setTimeout(()=>{
-    window.print();
-    setTimeout(()=>{document.body.classList.remove('printing-interv');g('print-interv').classList.remove('printing');},500);
-  },200);
+  setTimeout(()=>{ window.print(); },200);
+  // Cleanup géré par afterprint (voir listeners en bas)
 }
 
 // ══════ PHOTOS ══════
@@ -1169,7 +1102,7 @@ function buildFullPrintHTML(cr){
   const interv=getAllInterv(cr);
   const groups={};interv.forEach(iv=>{groups[iv.label]=[];});
   const autres=[];
-  (cr.tasks||[]).filter(t=>!isTaskArchived(t,cr)).forEach(t=>{
+  (cr.tasks||[]).forEach(t=>{
     if(groups[t.dest]!==undefined)groups[t.dest].push(t);
     else autres.push(t);
   });
@@ -1228,10 +1161,9 @@ function printCRFull(){
   const pf=g('print-full');
   pf.innerHTML=buildFullPrintHTML(cr);
   document.body.classList.add('printing-full');
-  setTimeout(()=>{
-    window.print();
-    setTimeout(()=>{document.body.classList.remove('printing-full');pf.innerHTML='';},500);
-  },300);
+  // Délai pour laisser le DOM se rendre avant d'ouvrir le dialogue
+  setTimeout(()=>{ window.print(); },300);
+  // Cleanup géré par afterprint (voir listeners en bas)
 }
 
 // ══════ MAIL DIFFUSION ══════
@@ -1342,7 +1274,32 @@ s.textContent=`
   }`;
 document.head.appendChild(s);
 
-// ══════ INIT ══════
+// ══════ PRINT LISTENERS ══════
+// Intercepte toute impression (bouton ⎙ PDF, Ctrl+P, iOS share→Imprimer…)
+// pour toujours produire le document complet (4 pages) quel que soit l'onglet actif.
+window.addEventListener('beforeprint', function(){
+  // Si déjà en mode impression (déclenché par printCRFull ou printInterv), ne rien faire
+  if(document.body.classList.contains('printing-full') ||
+     document.body.classList.contains('printing-interv')) return;
+  // Sinon : impression native → injecter le rendu complet
+  if(curPid && curCid){
+    const pf=g('print-full');
+    pf.innerHTML=buildFullPrintHTML(getCR(curPid,curCid));
+    document.body.classList.add('printing-full');
+  }
+});
+
+window.addEventListener('afterprint', function(){
+  // Nettoyage : supprime les classes et le contenu d'impression
+  document.body.classList.remove('printing-full');
+  document.body.classList.remove('printing-interv');
+  const pf=g('print-full');
+  if(pf) pf.innerHTML='';
+  const pi=g('print-interv');
+  if(pi){ pi.innerHTML=''; pi.classList.remove('printing'); }
+});
+
+
 window.addEventListener('load',function(){
   ['mo-task','mo-interv','mo-ponct','mo-proj','mo-exp'].forEach(id=>{
     const el=g(id);if(el)el.addEventListener('click',function(e){if(e.target===el)el.classList.remove('open');});
